@@ -1,0 +1,64 @@
+name: ImmortalWrt (Alternative)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_firmware:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: wshcxl/immortalwrt-23.5
+          ref: master
+          fetch-depth: 0
+
+      - name: Prepare build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential libncurses5-dev gawk zlib1g-dev \
+            git python3 unzip wget curl rsync
+
+      - name: Add 5G modem support
+        run: |
+          rm -rf package/5g-modem-support
+          git clone https://github.com/wshcxl/5G-Modem-Support.git package/5g-modem-support
+
+      - name: Install feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Apply configuration
+        run: |
+          cp configs/phicomm_psg1218a.config .config
+          make defconfig
+
+      - name: Download package sources
+        run: make download -j$(nproc)
+
+      - name: Start compilation
+        run: make -j$(nproc) V=s
+
+      - name: Save firmware artifacts
+        run: |
+          mkdir -p firmware
+
+          echo "Scanning for firmware files..."
+          find bin -type f -name "*psg1218a*.bin" -exec cp {} firmware/ \;
+
+          if [ -z "$(ls firmware)" ]; then
+            echo "WARNING: No firmware found!"
+            ls -R bin > firmware/bin_structure.txt
+          else
+            echo "Firmware found:"
+            ls -lh firmware
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: immortalwrt-psg1218a
+          path: firmware/*
+          if-no-files-found: warn
