@@ -1,58 +1,63 @@
-- name: Load .config
-  run: |
-    # 请确保你的 config 文件路径正确
-    cp configs/phicomm_psg1218a.config .config
-    make defconfig
+name: Build ImmortalWrt (Ultimate)
 
-- name: Download Package
-  run: make download -j$(nproc)
+on:
+  workflow_dispatch:
 
-- name: Compile Firmware
-  run: make -j$(nproc) V=s
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-# =========================================================
-# === 关键步骤：固件收集与上传 (集大成之方案) ===
-# =========================================================
-- name: Collect and Upload Firmware
-  id: collector
-  run: |
-    # 1. 创建标准输出目录
-    mkdir -p output/phicomm_psg1218a
+    steps:
+      - name: Checkout ImmortalWrt source
+        uses: actions/checkout@v4
+        with:
+          repository: wshcxl/immortalwrt-23.5
+          ref: master
+          fetch-depth: 0
 
-    # 2. 尝试从标准路径收集
-    echo "::group::Attempt 1: Copying from standard path"
-    find output/phicomm_psg1218a -maxdepth 1 -name "*.bin" | grep -q . && echo "Files found in standard path." || echo "No files in standard path."
-    echo "::endgroup::"
+      - name: Add 5G-Modem-Support plugin
+        run: |
+          rm -rf package/5g-modem-support
+          git clone https://github.com/wshcxl/5G-Modem-Support.git package/5g-modem-support
 
-    # 3. 如果标准路径为空，则启动兜底搜索
-    if [ -z "$(ls -A output/phicomm_psg1218a 2>/dev/null)" ]; then
-      echo "::group::Attempt 2: Fallback search in bin/ directory"
-      echo "Standard path is empty. Starting fallback search..."
-      # 全局搜索所有 .bin 文件，并复制到标准输出目录
-      find bin/ -type f -name "*.bin" -exec cp {} output/phicomm_psg1218a/ \;
-      echo "Fallback search finished."
-      echo "::endgroup::"
-    fi
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential libncurses5-dev gawk zlib1g-dev \
+            git python3 unzip wget curl rsync
 
-    # 4. 最终检查并列出文件
-    echo "::group::Final Check and List"
-    if [ -z "$(ls -A output/phicomm_psg1218a 2>/dev/null)" ]; then
-      echo "::warning::No firmware files were found after all attempts."
-      # 即使没找到固件，也创建一个目录列表文件，方便排查
-      echo "Creating directory structure for debugging..."
-      ls -lahR > output/directory_list.txt
-      mv output/directory_list.txt output/phicomm_psg1218a/
-    else
-      echo "Successfully collected the following firmware files:"
-      ls -lh output/phicomm_psg1218a
-    fi
-    echo "::endgroup::"
+      - name: Update and install feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-- name: Upload Firmware Artifact
-  uses: actions/upload-artifact@v4
-  with:
-    name: phicomm-psg1218a-firmware
-    # 路径与 collect-and-upload 步骤中的标准输出目录保持一致
-    path: output/phicomm_psg1218a/*
-    # 即使目录为空也继续，因为上一步已经处理了空目录的情况
-    if-no-files-found: ignore 
+      - name: Load device config
+        run: |
+          set -e
+          cp configs/phicomm_psg1218a.config .config
+          make defconfig
+
+      - name: Download package sources
+        run: |
+          make download -j$(nproc)
+
+      - name: Compile firmware
+        run: |
+          make -j$(nproc) V=s
+
+      - name: Collect firmware files
+        run: |
+          mkdir -p output/phicomm_psg1218a
+
+          echo "Searching for firmware files..."
+          find bin/targets -type f -name "*psg1218a*.bin" -exec cp {} output/phicomm_psg1218a/ \;
+
+          ls -lh output/phicomm_psg1218a
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: immortalwrt-psg1218a-firmware
+          path: output/phicomm_psg1218a/*
+          if-no-files-found: warn
