@@ -8,31 +8,55 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout ImmortalWrt source
+        uses: actions/checkout@v3
         with:
           repository: immortalwrt/immortalwrt
           ref: master
+          fetch-depth: 0
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk zlib1g-dev git python3 unzip wget curl
-
-      - name: Add 5G plugin
+      - name: Add 5G-Modem-Support plugin
         run: |
           rm -rf package/5g-modem-support
           git clone https://github.com/wshcxl/5G-Modem-Support.git package/5g-modem-support
 
-      - name: Feeds
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential libncurses5-dev gawk zlib1g-dev \
+            git python3 unzip wget curl rsync
+
+      - name: Update and install feeds
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Config
+      - name: Debug config path
+        run: |
+          pwd
+          ls -R configs || echo "configs NOT FOUND"
+
+      - name: Load preset config
         run: |
           cp configs/phicomm_psg1218a.config .config
           make defconfig
 
-      - name: Compile
+      - name: Download package sources
+        run: make download -j$(nproc)
+
+      - name: Compile firmware
         run: make -j1 V=s
+
+      - name: Collect firmware files
+        run: |
+          mkdir -p output/phicomm_psg1218a
+          cp bin/targets/ramips/mt7621/*psg1218a*.bin output/phicomm_psg1218a/ || true
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: immortalwrt-psg1218a-5g
+          path: output/phicomm_psg1218a/*
+          retention-days: 7
 
