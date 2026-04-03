@@ -1,4 +1,4 @@
-name: Build ImmortalWrt
+name: Build Factory Firmware (OpenClash)
 
 on:
   workflow_dispatch:
@@ -8,17 +8,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout ImmortalWrt (with configs)
-        uses: actions/checkout@v3
+      - name: Checkout ImmortalWrt
+        uses: actions/checkout@v4
         with:
           repository: wshcxl/immortalwrt-23.5
           ref: master
           fetch-depth: 0
-
-      - name: Add 5G-Modem-Support plugin
-        run: |
-          rm -rf package/5g-modem-support
-          git clone https://github.com/wshcxl/5G-Modem-Support.git package/5g-modem-support
 
       - name: Install build dependencies
         run: |
@@ -32,12 +27,9 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Load device config (final fix)
+      - name: Use factory config
         run: |
-          set -e
-          pwd
-          ls configs
-          cp configs/phicomm_psg1218a.config .config
+          cp configs/phicomm_psg1218a-factory.config .config
           make defconfig
 
       - name: Download package sources
@@ -48,15 +40,15 @@ jobs:
         run: |
           make -j$(nproc) V=s
 
-      - name: Collect firmware files
+      - name: Collect factory firmware
         run: |
-          mkdir -p output/phicomm_psg1218a
-          find bin/targets -type f \( -name "*psg1218a*" -o -name "*PSG1218A*" \) -exec cp {} output/phicomm_psg1218a/ \;
-          ls -lh output/phicomm_psg1218a
+          mkdir -p output/firmware
+          find bin -type f -name "*factory*.bin" -exec cp {} output/firmware/ \;
+          ls -lh output/firmware
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
-          name: immortalwrt-psg1218a-5g
-          path: output/phicomm_psg1218a/*
+          name: immortalwrt-psg1218a-factory
+          path: output/firmware/*
           retention-days: 7
