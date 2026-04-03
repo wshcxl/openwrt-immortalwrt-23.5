@@ -8,10 +8,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout ImmortalWrt source
+      - name: Checkout ImmortalWrt (with configs)
         uses: actions/checkout@v3
         with:
-          repository: immortalwrt/immortalwrt
+          repository: wshcxl/immortalwrt-23.5
           ref: master
           fetch-depth: 0
 
@@ -32,21 +32,21 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Debug config path
+      - name: Load device config (final fix)
         run: |
+          set -e
           pwd
-          ls -R configs || echo "configs NOT FOUND"
-
-      - name: Load preset config
-        run: |
+          ls configs
           cp configs/phicomm_psg1218a.config .config
           make defconfig
 
       - name: Download package sources
-        run: make download -j$(nproc)
+        run: |
+          make download -j$(nproc)
 
       - name: Compile firmware
-        run: make -j1 V=s
+        run: |
+          make -j$(nproc) V=s
 
       - name: Collect firmware files
         run: |
@@ -59,4 +59,3 @@ jobs:
           name: immortalwrt-psg1218a-5g
           path: output/phicomm_psg1218a/*
           retention-days: 7
-
