@@ -1,4 +1,4 @@
-name: 🚀 ImmortalWrt 稳赢编译版
+name: 🚀 ImmortalWrt 编译版 (专攻 Factory 固件)
 
 on:
   workflow_dispatch:
@@ -6,18 +6,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 使用默认的 bash shell
-    defaults:
-      run:
-        shell: bash
 
     steps:
       # 1. 获取源码
       - name: 1. 拉取 ImmortalWrt 源码
         uses: actions/checkout@v4
 
-      # 2. 安装系统依赖 (强力版)
-      - name: 2. 安装系统依赖
+      # 2. 安装依赖
+      - name: 2. 安装系统核心依赖
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libncurses5-dev gawk zlib1g-dev \
@@ -25,17 +21,7 @@ jobs:
             libssl-dev ccache ecj fastjar file g++ gettext gcc-multilib \
             g++-multilib libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev \
             libmpc-dev libmpfr-dev libreadline-dev libtool lld llvm patch \
-            perl-modules perl perl-modules-5.34 perl-modules-5.38 \
-            python3-pygments python3-yaml python3-markdown python3-unidecode \
-            python3-docutils python3-ply python3-pyelftools \
-            python3-six python3-urwid python3-requests python3-certifi \
-            python3-chardet python3-idna python3-urllib3 python3-six \
-            python3-attr python3-automat python3-bcrypt python3-blinker \
-            python3-cffi-backend python3-click python3-colorama \
-            python3-constantly python3-cryptography python3-hamcrest \
-            python3-hyperlink python3-incremental python3-openssl \
-            python3-parsley python3-pyasn1 python3-pyasn1-modules \
-            python3-service-identity python3-twisted python3-zope.interface \
+            perl-modules perl python3-pygments python3-yaml python3-markdown \
             subversion swig texinfo xsltproc
 
       # 3. 添加 5G 插件
@@ -50,48 +36,41 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      # 5. 加载配置
+      # 5. 加载配置 (关键修改)
       - name: 5. 加载配置文件
         run: |
-          # 复制你的配置文件
           cp configs/phicomm_psg1218a.config .config
-          # 生成默认配置，确保所有依赖都解析正确
+          
+          # 关键步骤：强制开启 SquashFS 格式，这是生成 Factory 固件的前提
+          echo 'CONFIG_TARGET_ROOTFS_SQUASHFS=y' >> .config
+          
           make defconfig
 
       # 6. 下载源码包
       - name: 6. 下载源码包
         run: make download -j$(nproc)
 
-      # 7. 编译 (核心步骤)
-      - name: 7. 开始编译 (多线程加速)
+      # 7. 编译固件
+      - name: 7. 开始编译固件
         run: |
-          # 使用 V=s 输出详细日志，方便出错时排查
-          # -j$(nproc) 使用所有 CPU 核心加速
           make -j$(nproc) V=s
 
-      # 8. 智能收集固件 (终极方案)
-      - name: 8. 收集固件 (无视文件名)
+      # 8. 收集固件 (精准抓取 Factory)
+      - name: 8. 收集固件 (只抓 Factory 和 Bin)
         run: |
           mkdir -p output_firmware
           
-          echo "🔍 正在全盘搜索 .bin 固件文件..."
+          echo "🔍 正在搜索所有 .bin 文件..."
+          # 先抓取所有 .bin 文件，防止漏掉
+          find bin/targets -type f -name "*.bin" -exec cp {} output_firmware/ \;
           
-          # 核心逻辑：不管文件名是什么，只要是 bin 结尾，全部复制出来
-          # 这样可以完美避开 phicomm_psg1218a 还是 openwrt.bin 的命名坑
-          find bin/targets -type f -name "*.bin" | while read file; do
-            echo "📦 发现固件: $file"
-            cp "$file" output_firmware/
-          done
+          echo ""
+          echo "📦 最终打包的文件列表："
+          ls -lh output_firmware/
           
-          # 检查是否抓到了文件
-          if [ "$(ls -A output_firmware)" ]; then
-             echo "✅ 成功收集到固件！"
-             ls -lh output_firmware/
-          else
-             echo "❌ 致命错误：编译似乎完成了，但 bin 目录下没有任何 .bin 文件！"
-             echo "💡 请向上翻阅日志，检查 '开始编译' 步骤是否有红色 Error 报错。"
-             echo "📋 以下是 bin/targets 的目录结构，供排查使用："
-             ls -R bin/targets
+          # 检查是否有文件
+          if [ ! "$(ls -A output_firmware)" ]; then
+             echo "❌ 没有任何文件生成！"
              exit 1
           fi
 
@@ -99,6 +78,6 @@ jobs:
       - name: 9. 上传固件
         uses: actions/upload-artifact@v4
         with:
-          name: ImmortalWrt-PSG1218A-固件包
+          name: ImmortalWrt-PSG1218A-Factory固件
           path: output_firmware/*
           retention-days: 7
