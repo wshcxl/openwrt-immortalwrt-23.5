@@ -1,10 +1,10 @@
-name: ImmortalWrt (防崩溃修正版)
+name: ImmortalWrt 极速编译 (最终版)
 
 on:
   workflow_dispatch:
 
 jobs:
-  编译固件任务:
+  build_firmware:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,7 +22,7 @@ jobs:
             build-essential libncurses5-dev gawk zlib1g-dev \
             git python3 unzip wget curl rsync python3-pip
 
-      - name: 强制安装 Python 依赖 (修复核心报错)
+      - name: 强制安装 Python 依赖 (防报错)
         run: |
           pip3 install --break-system-packages pyyaml pygments markdown pyunidecode
 
@@ -56,6 +56,6 @@ jobs:
       - name: 上传固件
         uses: actions/upload-artifact@v4
         with:
-          name: immortalwrt-psg1218a-防爆版
+          name: immortalwrt-psg1218a-final
           path: firmware/*
           if-no-files-found: warn
