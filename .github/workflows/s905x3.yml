@@ -1,0 +1,133 @@
+name:  HK1 Box (S905X3) - 监控服务器版
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_firmware:
+    runs-on: ubuntu-latest
+    env:
+      # 解决 Node.js 报警
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name:  1. 拉取源码 (使用 flippy 大佬的源码，兼容性好)
+        uses: actions/checkout@v4
+        with:
+          repository: 'breakings/OpenWrt'
+          ref: 'main'
+
+      - name: ️ 2. 准备环境与依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev gawk \
+            zlib1g-dev git python3 python3-pip unzip wget curl file \
+            libssl-dev xsltproc
+
+      - name:  3. 添加全家桶插件
+        run: |
+          echo " 正在下载各类插件源码..."
+          
+          # 1. AdGuard Home (去广告)
+          git clone https://github.com/kongfl888/luci-app-adguardhome.git package/luci-app-adguardhome
+          
+          # 2. SSR+ (含V2Ray核心)
+          git clone https://github.com/fw876/helloworld.git package/luci-app-ssr-plus
+          
+          # 3. 网易云解锁
+          git clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic.git package/luci-app-unblockneteasemusic
+          
+          # 4. 短信工具 (S905X3通常用不到，但为了统一加上)
+          # git clone https://github.com/4IceG/luci-app-sms-tool.git package/luci-app-sms-tool
+          
+          # 5. 5G 插件 (S905X3一般不用，去掉以节省空间)
+          # git clone https://github.com/wshcxl/5G-Modem-Support.git package/5g-modem-support
+
+      - name:  4. 更新 Feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name:  5. 深度配置 (S905X3 + 监控 + 存储)
+        run: |
+          rm -f .config
+          
+          # --- 核心平台选择 ---
+          echo "CONFIG_TARGET_armvirt=y" >> .config
+          echo "CONFIG_TARGET_armvirt_64=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_CPIOGZ=y" >> .config
+          
+          # --- 基础驱动 ---
+          echo "CONFIG_PACKAGE_kmod-usb-net=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-net-cdc-ether=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-net-rndis=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb3=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-storage=y" >> .config # 存储支持
+          echo "CONFIG_PACKAGE_kmod-usb-dwc3=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-fs-ext4=y" >> .config # 硬盘格式支持
+          echo "CONFIG_PACKAGE_kmod-fs-ntfs=y" >> .config # NTFS支持
+          echo "CONFIG_PACKAGE_kmod-fs-vfat=y" >> .config
+          echo "CONFIG_PACKAGE_block-mount=y" >> .config
+          
+          # --- 核心功能 ---
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
+          
+          # --- 插件启用 ---
+          
+          # 1. AdGuard Home (去广告)
+          echo "CONFIG_PACKAGE_luci-app-adguardhome=y" >> .config
+          
+          # 2. SSR+ (V2Ray)
+          echo "CONFIG_PACKAGE_luci-app-ssr-plus=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_V2ray=y" >> .config
+          
+          # 3. 网易云解锁
+          echo "CONFIG_PACKAGE_luci-app-unblockneteasemusic=y" >> .config
+          
+          # 4. TurboACC 网络加速
+          echo "CONFIG_PACKAGE_luci-app-turboacc=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-tcp-bbr=y" >> .config
+          
+          # --- 监控与远程访问 (重点) ---
+          
+          # 5. UPnP (自动端口映射)
+          echo "CONFIG_PACKAGE_luci-app-upnp=y" >> .config
+          echo "CONFIG_PACKAGE_miniupnpd=y" >> .config
+          
+          # 6. 动态域名 DDNS (含花生壳)
+          echo "CONFIG_PACKAGE_luci-app-ddns=y" >> .config
+          echo "CONFIG_PACKAGE_ddns-scripts=y" >> .config
+          echo "CONFIG_PACKAGE_ddns-scripts_oray_com=y" >> .config # 花生壳
+          echo "CONFIG_PACKAGE_ddns-scripts_freedns_42_pl=y" >> .config
+          echo "CONFIG_PACKAGE_ddns-scripts_no-ip_com=y" >> .config
+          
+          # --- 存储与共享 (Samba) ---
+          # 7. Samba4 (局域网文件共享，方便看录像)
+          echo "CONFIG_PACKAGE_samba4-server=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-samba4=y" >> .config
+
+          # 生成配置
+          make defconfig
+
+      - name:  6. 下载源码包
+        run: make download -j$(nproc)
+
+      - name: ️ 7. 开始编译
+        run: make -j$(nproc) V=s
+
+      - name:  8. 整理固件
+        run: |
+          mkdir -p firmware_output
+          # 复制生成的镜像文件
+          find bin -type f $ -name "*.img.gz" -o -name "*.tar.gz" $ -exec cp {} firmware_output/ \;
+          ls -lh firmware_output/
+
+      - name:  9. 上传至 GitHub Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: HK1-Box-S905X3-监控版
+          path: firmware_output/*
+          retention-days: 7
