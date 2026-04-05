@@ -1,4 +1,4 @@
-name: 🚀 极路由4增强版 - 满血修复版 (含LZ4双保险)
+name: 🚀 极路由4增强版 - 满血修复版 (无括号版+全功能)
 
 on:
   workflow_dispatch:
@@ -13,12 +13,11 @@ jobs:
       - name: 📦 1. 拉取源码
         uses: actions/checkout@v4
 
-      - name: 🛠️ 2. 修复 LZ4 下载失败 (双保险机制)
-        # 请务必先下载 lz4-1.10.0.tar.gz，重命名为 lz4-1.10.0.tar.zst，上传到仓库根目录
-        # 这一步会把你的本地文件复制到编译缓存区，优先使用
+      - name: 🛠️ 2. 修复 LZ4 下载失败 (无括号文件名)
+        # 请务必上传名为 lz4-fix.tar.zst 的文件，不要带括号
         run: |
           mkdir -p dl
-          cp lz4-1.10.0.tar.zst dl/ || echo "⚠️ 警告：未检测到本地 LZ4 文件，将尝试走网络下载 (可能依然会失败)"
+          cp lz4-fix.tar.zst dl/ || echo "⚠️ 警告：未找到本地修复文件"
 
       - name: ⚙️ 3. 准备环境与依赖
         run: |
@@ -27,36 +26,26 @@ jobs:
             zlib1g-dev git python3 python3-pip unzip wget curl file
           pip3 install --break-system-packages pyyaml pygments markdown Unidecode
 
-      - name: 📥 4. 添加全家桶插件 (去广告 + 监控支持)
+      - name: 📥 4. 添加全家桶插件
         run: |
           echo "👉 正在下载各类插件源码..."
-          
           # 1. 5G 插件
           git clone https://github.com/wshcxl/5G-Modem-Support.git package/5g-modem-support
-          
-          # 2. AdGuard Home (去广告核心)
+          # 2. AdGuard Home
           git clone https://github.com/kongfl888/luci-app-adguardhome.git package/luci-app-adguardhome
-          
-          # 3. SSR+ (含V2Ray核心)
+          # 3. SSR+
           git clone https://github.com/fw876/helloworld.git package/luci-app-ssr-plus
-          
           # 4. 网易云解锁
           git clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic.git package/luci-app-unblockneteasemusic
-          
           # 5. 短信工具
           git clone https://github.com/4IceG/luci-app-sms-tool.git package/luci-app-sms-tool
 
-            - name: ⚡ 5. 更新 Feeds (强制刷新依赖)
-           run: |
-          # 1. 清理旧的 feeds 配置，防止缓存干扰
-          ./scripts/feeds clean
-          # 2. 重新更新所有 feeds，这步会尝试获取最新的 lz4 下载链接
+      - name: ⚡ 5. 更新 Feeds
+        run: |
           ./scripts/feeds update -a
-          # 3. 安装 feeds
           ./scripts/feeds install -a
 
-
-      - name: 📝 6. 深度配置 (去下载 + 加监控)
+      - name: 📝 6. 深度配置 (全功能开启)
         run: |
           rm -f .config
           
@@ -86,10 +75,10 @@ jobs:
           echo "CONFIG_PACKAGE_luci-app-5g-modem-support=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-5g-modem-support-zh-cn=y" >> .config
           
-          # 2. AdGuard Home (去广告)
+          # 2. AdGuard Home
           echo "CONFIG_PACKAGE_luci-app-adguardhome=y" >> .config
           
-          # 3. SSR+ (V2Ray)
+          # 3. SSR+
           echo "CONFIG_PACKAGE_luci-app-ssr-plus=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_V2ray=y" >> .config
           
@@ -99,15 +88,15 @@ jobs:
           # 5. 短信工具
           echo "CONFIG_PACKAGE_luci-app-sms-tool=y" >> .config
           
-          # 6. TurboACC 网络加速 (必开，省CPU)
+          # 6. TurboACC 网络加速
           echo "CONFIG_PACKAGE_luci-app-turboacc=y" >> .config
           echo "CONFIG_PACKAGE_kmod-tcp-bbr=y" >> .config
           
-          # 7. UPnP (监控端口自动映射)
+          # 7. UPnP
           echo "CONFIG_PACKAGE_luci-app-upnp=y" >> .config
           echo "CONFIG_PACKAGE_miniupnpd=y" >> .config
           
-          # 8. 动态域名 DDNS (配合花生壳实现远程访问)
+          # 8. 动态域名 DDNS
           echo "CONFIG_PACKAGE_luci-app-ddns=y" >> .config
           echo "CONFIG_PACKAGE_ddns-scripts=y" >> .config
           echo "CONFIG_PACKAGE_ddns-scripts_freedns_42_pl=y" >> .config
@@ -115,7 +104,6 @@ jobs:
           echo "CONFIG_PACKAGE_ddns-scripts_oray_com=y" >> .config
           echo "CONFIG_PACKAGE_ddns-scripts_godaddy_com=y" >> .config
 
-          # 生成配置
           make defconfig
 
       - name: 📥 7. 下载源码包
@@ -127,16 +115,11 @@ jobs:
       - name: 🧹 9. 整理固件和插件包
         run: |
           mkdir -p firmware_output
-          
-          # 复制固件
           find bin -type f -name "*hiwifi*factory*.bin" -exec cp {} firmware_output/ \; || true
           if [ ! "$(ls -A firmware_output/*.bin 2>/dev/null)" ]; then
              find bin -type f -name "*hiwifi*squashfs*.bin" -exec cp {} firmware_output/ \;
           fi
-          
-          # 复制所有 IPK 插件包
           find bin -type f -name "*.ipk" -exec cp {} firmware_output/ \;
-          
           ls -lh firmware_output/
 
       - name: 📤 10. 上传至 GitHub Artifacts
