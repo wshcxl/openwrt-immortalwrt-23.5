@@ -46,10 +46,15 @@ jobs:
           # 5. 短信工具
           git clone https://github.com/4IceG/luci-app-sms-tool.git package/luci-app-sms-tool
 
-      - name: ⚡ 5. 更新 Feeds (获取最新软件列表)
-        run: |
+            - name: ⚡ 5. 更新 Feeds (强制刷新依赖)
+           run: |
+          # 1. 清理旧的 feeds 配置，防止缓存干扰
+          ./scripts/feeds clean
+          # 2. 重新更新所有 feeds，这步会尝试获取最新的 lz4 下载链接
           ./scripts/feeds update -a
+          # 3. 安装 feeds
           ./scripts/feeds install -a
+
 
       - name: 📝 6. 深度配置 (去下载 + 加监控)
         run: |
