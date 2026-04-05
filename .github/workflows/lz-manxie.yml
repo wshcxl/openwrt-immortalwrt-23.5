@@ -1,4 +1,4 @@
-name: 🚀 极路由4～监控版 (含5G/去广告/解锁/监控)
+name:  极路由4 - 满血防崩版 (双线编译专用)
 
 on:
   workflow_dispatch:
@@ -10,49 +10,47 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - name: 📦 1. 拉取源码
+      - name:  1. 拉取源码
         uses: actions/checkout@v4
 
-      - name: 🛠️ 2. 修复 LZ4 下载 (关键修复)
+      - name: ️ 2. 修复 LZ4 下载 (关键修复)
         run: |
           mkdir -p dl
-          # ⭐⭐⭐ 关键点：文件名必须叫 "lz4-1.10.0.tar.zst" 才能匹配
-          cp lz4-1.10.0.tar.zst dl/ || echo "⚠️ 警告：未找到 lz4-1.10.0.tar.zst，请检查文件名"
+          #  关键点：文件名必须叫 "lz4-1.10.0.tar.zst" 才能匹配
+          cp lz4-1.10.0.tar.zst dl/ || echo "️ 警告：未找到 lz4-1.10.0.tar.zst，请检查文件名"
           ls -la dl/ # 显示一下缓存目录里有什么，方便调试
 
-      - name: ⚙️ 3. 准备环境与虚拟内存 (防错版)
+      - name: ️ 3. 准备环境与虚拟内存 (防错版)
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libncurses5-dev gawk \
             zlib1g-dev git python3 python3-pip unzip wget curl file
           pip3 install --break-system-packages pyyaml pygments markdown Unidecode
 
-          # ⭐⭐⭐ 关键修复：增加 8GB 虚拟内存 (如果失败则跳过，不报错)
+          #  关键修复：增加 8GB 虚拟内存 (如果失败则跳过，不报错)
           sudo fallocate -l 8G /swapfile || true
           sudo chmod 600 /swapfile || true
           sudo mkswap /swapfile || true
           sudo swapon /swapfile || true
-          echo "✅ 尝试开启虚拟内存 (如果报错请忽略，不影响后续编译)："
+          echo " 尝试开启虚拟内存 (如果报错请忽略，不影响后续编译)："
           free -h
 
-      - name: 📥 4. 添加全家桶插件 (已增加监控插件)
+      - name:  4. 添加全家桶插件 (满血版)
         run: |
-          echo "👉 正在下载各类插件源码..."
+          echo " 正在下载各类插件源码..."
           git clone https://github.com/wshcxl/5G-Modem-Support.git package/5g-modem-support
           git clone https://github.com/kongfl888/luci-app-adguardhome.git package/luci-app-adguardhome
           git clone https://github.com/fw876/helloworld.git package/luci-app-ssr-plus
           git clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic.git package/luci-app-unblockneteasemusic
           git clone https://github.com/4IceG/luci-app-sms-tool.git package/luci-app-sms-tool
-          # 新增：系统监控插件
-          git clone https://github.com/brvphoenix/luci-app-wrtbwmon.git package/luci-app-wrtbwmon
-          git clone https://github.com/brvphoenix/luci-app-statistics.git package/luci-app-statistics
+          # 注意：满血版不包含监控插件，保持纯净
 
-      - name: ⚡ 5. 更新 Feeds
+      - name:  5. 更新 Feeds
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: 📝 6. 深度配置 (全功能锁定)
+      - name:  6. 深度配置 (全功能锁定)
         run: |
           rm -f .config
           echo "CONFIG_TARGET_ramips=y" >> .config
@@ -89,29 +87,25 @@ jobs:
           echo "CONFIG_PACKAGE_miniupnpd=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-ddns=y" >> .config
           echo "CONFIG_PACKAGE_ddns-scripts=y" >> .config
-          
-          # --- 监控插件 ---
-          echo "CONFIG_PACKAGE_luci-app-statistics=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-wrtbwmon=y" >> .config
 
           make defconfig
 
-      - name: 📥 7. 下载源码包
+      - name:  7. 下载源码包
         run: make download -j$(nproc)
 
-      - name: 🏗️ 8. 开始编译 (单线程防崩)
+      - name: ️ 8. 开始编译 (单线程防崩)
         run: make V=s
 
-      - name: 🧹 9. 整理固件和插件包
+      - name:  9. 整理固件和插件包
         run: |
           mkdir -p firmware_output
           find bin -type f $ -name "*hiwifi*factory*.bin" -o -name "*hiwifi*squashfs*.bin" $ -exec cp {} firmware_output/ \;
           find bin -type f -name "*.ipk" -exec cp {} firmware_output/ \;
           ls -lh firmware_output/
 
-      - name: 📤 10. 上传至 GitHub Artifacts
+      - name:  10. 上传至 GitHub Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: 极路由4-监控版固件
+          name: 极路由4-满血版固件
           path: firmware_output/*
           retention-days: 7
