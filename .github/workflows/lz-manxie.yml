@@ -1,3 +1,4 @@
+
 name: 极路由4 - 满血 -Ubuntu 18.04
 
 on:
@@ -41,6 +42,14 @@ jobs:
             qemu-utils rsync scons squashfs-tools subversion swig texinfo \
             uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
 
+      # --- 新增：拉取 5G 模组源码 ---
+      - name: 拉取 5G 模组驱动源码
+        run: |
+          mkdir -p package/5g-modem
+          git clone https://github.com/wshcxl/5G-Modem-Support.git package/5g-modem/5G-Modem-Support
+          echo "✅ 5G 模组源码拉取完成"
+
+
       # --- 4. 修复 LZ4 (如果你有这个包的话) ---
       - name: 修复 LZ4 源码包
         run: |
@@ -68,6 +77,8 @@ jobs:
           CONFIG_DEVEL=y
           CONFIG_CCACHE=y
           CONFIG_IPV6=y
+          CONFIG_PACKAGE_luci-app-modem=y
+
           
           # --- 基础 LuCI ---
           CONFIG_PACKAGE_luci=y
@@ -95,6 +106,13 @@ jobs:
           # --- 常用工具 ---
           CONFIG_PACKAGE_luci-app-upnp=y
           CONFIG_PACKAGE_luci-i18n-upnp-zh-cn=y
+
+          # --- 无线驱动支持 (WiFi 5G) ---
+          CONFIG_PACKAGE_kmod-mt76x2=y
+          CONFIG_PACKAGE_kmod-mt7603=y
+          CONFIG_PACKAGE_mt7603-firmware=y
+          CONFIG_PACKAGE_mt76x2-firmware=y
+
           
           # --- USB 驱动支持 ---
           CONFIG_PACKAGE_kmod-usb-core=y
