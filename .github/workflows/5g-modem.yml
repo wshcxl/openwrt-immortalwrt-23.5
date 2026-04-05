@@ -74,21 +74,23 @@ jobs:
       - name: 🏗️ 7. 开始编译
         run: make -j$(nproc) V=s
 
-      - name: 🧹 8. 收集与重命名固件
+      - name: 🧹 8. 收集固件 (通杀版)
         run: |
           mkdir -p firmware_output
           
-          # 查找生成的 factory 固件
-          # 极路由4增强版的固件通常包含 "hiwifi" 和 "factory" 字样
-          find bin -type f -name "*hiwifi*factory*.bin" -exec cp {} firmware_output/ \;
+          # 1. 先按常规名字找 (你的原逻辑)
+          find bin -type f -name "*hiwifi*.bin" -exec cp {} firmware_output/ \;
           
-          # 如果没找到 factory，就找 squashfs (兜底方案)
+          # 2. 如果上面没找到，就找所有 bin 文件 (保底)
           if [ ! "$(ls -A firmware_output/*.bin 2>/dev/null)" ]; then
-             find bin -type f -name "*hiwifi*squashfs*.bin" -exec cp {} firmware_output/ \;
+             echo "⚠️ 未找到 hiwifi 关键词固件，正在打包所有 bin 文件..."
+             find bin -type f -name "*.bin" -exec cp {} firmware_output/ \;
           fi
           
+          # 3. 列出所有找到的文件 (方便你检查)
           echo "✅ 编译产物清单："
           ls -lh firmware_output/
+
 
       - name: 📤 9. 上传固件
         uses: actions/upload-artifact@v4
