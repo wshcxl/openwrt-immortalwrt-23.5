@@ -77,33 +77,24 @@ jobs:
           CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
           
           # --- 代理与解锁插件 ---
-          # V2Ray 核心与服务端
-          CONFIG_PACKAGE_v2ray-core=y
-          CONFIG_PACKAGE_luci-app-v2ray-server=y
-          CONFIG_PACKAGE_luci-i18n-v2ray-server-zh-cn=y
+          # PassWall (代理插件)
+          CONFIG_PACKAGE_luci-app-passwall=y
+          CONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y
           # 网易云解锁
           CONFIG_PACKAGE_luci-app-unblockneteasemusic=y
           CONFIG_PACKAGE_luci-i18n-unblockneteasemusic-zh-cn=y
-          
+
           # --- 监控全家桶 ---
           # DDNS
           CONFIG_PACKAGE_luci-app-ddns=y
           CONFIG_PACKAGE_luci-i18n-ddns-zh-cn=y
-          # AdGuard Home
-          CONFIG_PACKAGE_luci-app-adguardhome=y
-          CONFIG_PACKAGE_luci-i18n-adguardhome-zh-cn=y
           # TurboACC 网络加速
           CONFIG_PACKAGE_luci-app-turboacc=y
           CONFIG_PACKAGE_luci-i18n-turboacc-zh-cn=y
-          # 流量监控
-          CONFIG_PACKAGE_luci-app-wrtbwmon=y
-          CONFIG_PACKAGE_luci-i18n-wrtbwmon-zh-cn=y
           
           # --- 常用工具 ---
           CONFIG_PACKAGE_luci-app-upnp=y
           CONFIG_PACKAGE_luci-i18n-upnp-zh-cn=y
-          CONFIG_PACKAGE_luci-app-samba=y
-          CONFIG_PACKAGE_luci-i18n-samba-zh-cn=y
           
           # --- USB 驱动支持 ---
           CONFIG_PACKAGE_kmod-usb-core=y
@@ -125,8 +116,8 @@ jobs:
         run: |
           # 关键优化：
           # 1. 使用 ccache 加速
-          # 2. -j2 线程数限制，防止 2核CPU 爆内存
-          make -j2 V=s
+          # 2. -j3 线程数限制，防止 2核CPU 爆内存
+          make -j3 V=s
 
       # --- 7. 上传 ---
       - name: 上传固件
