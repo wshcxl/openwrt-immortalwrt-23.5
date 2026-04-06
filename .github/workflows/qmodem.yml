@@ -1,0 +1,109 @@
+name: 🚀 极路由4增强版(HC5962) - 5G模组专用版
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_firmware:
+    runs-on: ubuntu-latest
+    
+    # ✅ 解决 Node.js 20 报警：强制使用 Node.js 24 环境
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: 📦 1. 拉取源码
+        uses: actions/checkout@v4
+
+      - name: ⚙️ 2. 准备环境与依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev gawk \
+            zlib1g-dev git python3 python3-pip unzip wget curl file
+          
+          # 安装 ImmortalWrt 需要的 Python 库
+          pip3 install --break-system-packages pyyaml pygments markdown Unidecode
+
+      - name: 📥 3. 添加 5G 插件 (RNDIS 支持)
+        run: |
+          echo "👉 正在下载 5G Modem Support 插件..."
+          rm -rf package//QModem.git
+          git clone https://github.com/wshcxl/QModem.git package/QModem
+
+
+
+      - name: 🔌 4. 更新 Feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a\
+          
+
+      - name: 📝 5. 深度配置 (注入 5G 驱动与 QModem)
+        run: |
+          # --- 核心配置开始 ---
+          rm -f .config
+          
+          # 1. 锁定设备：极路由4增强版 (HC5962)
+          echo "CONFIG_TARGET_ramips=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7621=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7621_DEVICE_hiwifi_hc5962=y" >> .config
+          
+          # 2. 锁定文件系统：Squashfs
+          echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
+
+          # 3. ⭐ 强制安装 LuCI 核心 (保持不变)
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-base=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-admin-full=y" >> .config
+          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_LUCI_LANG_zh-cn=y" >> .config
+
+          # 4. 注入 5G RNDIS 驱动 (保持不变)
+          echo "CONFIG_PACKAGE_kmod-usb-net-rndis=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-net=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb3=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb2=y" >> .config
+          echo "CONFIG_PACKAGE_usb-modeswitch=y" >> .config
+          echo "CONFIG_PACKAGE_comgt=y" >> .config
+         
+          # 5. 🔥 关键修正：注入 QModem (替换掉旧的 luci-app-modem)
+          # 注意：QModem 项目自带拨号管理逻辑，不需要单独的 quectel_cm_5G
+          # 根据文档，我们使用新的纯 JS 版本 (luci-app-qmodem-next)
+          echo "CONFIG_PACKAGE_luci-app-qmodem-next=y" >> .config
+          
+          # 如果你想用传统版本（如果新版本有问题），请注释掉上面一行，取消注释下一行：
+          # echo "CONFIG_PACKAGE_luci-app-qmodem=y" >> .config
+
+          # 6. 生成配置
+          make defconfig
+          # --- 核心配置结束 ---
+
+
+      - name: 📥 6. 下载源码包
+        run: make download -j$(nproc)
+
+      - name: 🏗️ 7. 开始编译
+        run: make -j$(nproc) V=s
+
+      - name: 🧹 8. 收集与重命名固件
+        run: |
+          mkdir -p firmware_output
+          
+          # 查找生成的 factory 固件
+          # 极路由4增强版的固件通常包含 "hiwifi" 和 "factory" 字样
+          find bin -type f -name "*hiwifi*factory*.bin" -exec cp {} firmware_output/ \;
+          
+          # 如果没找到 factory，就找 squashfs (兜底方案)
+          if [ ! "$(ls -A firmware_output/*.bin 2>/dev/null)" ]; then
+             find bin -type f -name "*hiwifi*squashfs*.bin" -exec cp {} firmware_output/ \;
+          fi
+          
+          echo "✅ 编译产物清单："
+          ls -lh firmware_output/
+
+      - name: 📤 9. 上传固件
+        uses: actions/upload-artifact@v4
+        with:
+          name: immortalwrt-hc5962-5G-RNDIS-Factory版
+          path: firmware_output/*.bin
