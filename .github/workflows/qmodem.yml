@@ -78,30 +78,28 @@ jobs:
 
 
       - name: 📥 6. 下载源码包
-        run: make download -j(nproc)
+        run: make download -j$(nproc) # 这里加个 $
 
       - name: 🏗️ 7. 开始编译
-        run: make -j(nproc) V=s
+        run: make -j$(nproc) V=s     # 这里加个 $
+
 
       - name: 🧹 8. 收集与重命名固件
         run: |
           mkdir -p firmware_output
-          
           # 查找生成的 factory 固件
-          # 极路由4增强版的固件通常包含 "hiwifi" 和 "factory" 字样
-          find bin -type f -name "hiwififactory*.bin" -exec cp {} firmware_output/ ;
+          find bin -type f -name "*hiwifi*factory*.bin" -exec cp {} firmware_output/ \; # 修复了 * 号和 \;
           
           # 如果没找到 factory，就找 squashfs (兜底方案)
           if [ ! "$(ls -A firmware_output/*.bin 2>/dev/null)" ]; then
-             find bin -type f -name "hiwifisquashfs*.bin" -exec cp {} firmware_output/ ;
+             find bin -type f -name "*hiwifi*squashfs*.bin" -exec cp {} firmware_output/ \; # 修复了 * 号和 \;
           fi
-          
           echo "✅ 编译产物清单："
           ls -lh firmware_output/
+
 
       - name: 📤 9. 上传固件
         uses: actions/upload-artifact@v4
         with:
           name: immortalwrt-hc5962-5G-RNDIS-Factory版
           path: firmware_output/*.bin
-这个这样写可以吗
