@@ -1,32 +1,31 @@
-
-name: 极路由4 - 满血 -Ubuntu 18.04
+name: 极路由4 - 终极满血版 - 24.04
 
 on:
   workflow_dispatch:
 
 jobs:
   build_firmware:
-    # 关键点：使用 Ubuntu 18.04，原生支持 Python 2.7，兼容性最强
-    runs-on: ubuntu-18.04
+    # 优化点：使用 Ubuntu 24.04，解决排队死循环问题
+    runs-on: ubuntu-24.04
 
     steps:
       # --- 1. 检出代码 ---
       - name: 检出代码
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # --- 2. 扩充 Swap (防止内存溢出，必做) ---
+      # --- 2. 增加 Swap (防止内存溢出) ---
       - name: 增加 Swap 虚拟内存
         run: |
           sudo swapoff -a
           sudo rm -f /swapfile
-          echo "⏳ 正在创建 4GB Swap 文件..."
-          sudo dd if=/dev/zero of=/swapfile bs=1M count=4096
+          echo "⏳ 正在创建 6GB Swap..."
+          sudo dd if=/dev/zero of=/swapfile bs=1M count=6144
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
-          free -h # 显示内存状态
+          free -h
 
-      # --- 3. 安装依赖 (Ubuntu 18.04 原生支持 Python 2.7) ---
+      # --- 3. 安装环境 (含 Python 库) ---
       - name: 安装编译环境
         run: |
           sudo apt-get update
@@ -37,37 +36,26 @@ jobs:
             libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev \
             libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev \
             libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp \
-            ninja-build p7zip p7zip-full patch pkgconf python2.7 python-dev \
-            python3 python3-pip python3-setuptools python3-pyelftools \
-            qemu-utils rsync scons squashfs-tools subversion swig texinfo \
-            uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+            ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip \
+            python3-setuptools python3-pyelftools qemu-utils rsync scons \
+            squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip \
+            vim wget xmlto xxd zlib1g-dev
+          
+          # 安装 Python 依赖，防止报错
+          pip3 install --break-system-packages pyyaml markdown
 
-      # --- 新增：拉取 5G 模组源码 ---
+      # --- 4. 拉取 5G 模组源码 ---
       - name: 拉取 5G 模组驱动源码
         run: |
           mkdir -p package/5g-modem
           git clone https://github.com/wshcxl/5G-Modem-Support.git package/5g-modem/5G-Modem-Support
           echo "✅ 5G 模组源码拉取完成"
 
-
-      # --- 4. 修复 LZ4 (如果你有这个包的话) ---
-      - name: 修复 LZ4 源码包
-        run: |
-          mkdir -p dl
-          if [ -f "lz4-1.10.0.tar.gz" ]; then
-            cp -f lz4-1.10.0.tar.gz dl/lz4-1.10.0.tar.gz
-            echo " LZ4 修复包已就位"
-          else
-            echo "⚠️ 提示：未检测到 lz4-1.10.0.tar.gz，尝试直接下载..."
-          fi
-
-      # --- 5. 核心配置 (包含你要求的所有插件) ---
-      - name: 自定义配置 (全家桶)
+      # --- 5. 核心配置 (满血插件版) ---
+      - name: 自定义配置 (满血全家桶)
         run: |
           # 更新 feeds
           ./scripts/feeds update -a
-          
-          # 安装所有基础 feeds (防止依赖缺失)
           ./scripts/feeds install -a
 
           # --- 生成 .config 文件 ---
@@ -77,44 +65,46 @@ jobs:
           CONFIG_DEVEL=y
           CONFIG_CCACHE=y
           CONFIG_IPV6=y
-          CONFIG_PACKAGE_luci-app-modem=y
-
           
-          # --- 基础 LuCI ---
+          # --- 核心 LuCI 界面 ---
           CONFIG_PACKAGE_luci=y
           CONFIG_PACKAGE_luci-base=y
           CONFIG_PACKAGE_luci-mod-admin-full=y
           CONFIG_PACKAGE_luci-theme-argon=y
           CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
           
-          # --- 代理与解锁插件 ---
-          # PassWall (代理插件)
+          # --- 代理插件 (满血核心) ---
           CONFIG_PACKAGE_luci-app-passwall=y
           CONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y
-          # 网易云解锁
           CONFIG_PACKAGE_luci-app-unblockneteasemusic=y
           CONFIG_PACKAGE_luci-i18n-unblockneteasemusic-zh-cn=y
-
-          # --- 监控全家桶 ---
-          # DDNS
-          CONFIG_PACKAGE_luci-app-ddns=y
-          CONFIG_PACKAGE_luci-i18n-ddns-zh-cn=y
-          # TurboACC 网络加速
+          
+          # --- 网络加速 (TurboACC) ---
           CONFIG_PACKAGE_luci-app-turboacc=y
           CONFIG_PACKAGE_luci-i18n-turboacc-zh-cn=y
+          CONFIG_PACKAGE_kmod-tcp-bbr=y
+          
+          # --- 动态域名 (DDNS) ---
+          CONFIG_PACKAGE_luci-app-ddns=y
+          CONFIG_PACKAGE_luci-i18n-ddns-zh-cn=y
           
           # --- 常用工具 ---
           CONFIG_PACKAGE_luci-app-upnp=y
           CONFIG_PACKAGE_luci-i18n-upnp-zh-cn=y
-
-          # --- 无线驱动支持 (WiFi 5G) ---
+          CONFIG_PACKAGE_luci-app-cifs-mount=y
+          CONFIG_PACKAGE_luci-i18n-cifs-mount-zh-cn=y
+          
+          # --- 5G 模组支持 ---
+          CONFIG_PACKAGE_luci-app-5g-modem-support=y
+          CONFIG_PACKAGE_luci-i18n-5g-modem-support-zh-cn=y
+          
+          # --- 无线驱动 (WiFi 5G) ---
           CONFIG_PACKAGE_kmod-mt76x2=y
           CONFIG_PACKAGE_kmod-mt7603=y
           CONFIG_PACKAGE_mt7603-firmware=y
           CONFIG_PACKAGE_mt76x2-firmware=y
-
           
-          # --- USB 驱动支持 ---
+          # --- USB 支持 ---
           CONFIG_PACKAGE_kmod-usb-core=y
           CONFIG_PACKAGE_kmod-usb2=y
           CONFIG_PACKAGE_kmod-usb3=y
@@ -126,20 +116,17 @@ jobs:
           CONFIG_PACKAGE_kmod-nls-utf8=y
           EOF
 
-          # 加载配置
           make defconfig
 
       # --- 6. 编译 ---
       - name: 编译固件
         run: |
-          # 关键优化：
-          # 1. 使用 ccache 加速
-          # 2. -j3 线程数限制，防止 2核CPU 爆内存
+          # 使用 -j3 限制线程，稳如老狗
           make -j3 V=s
 
       # --- 7. 上传 ---
       - name: 上传固件
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: 极路由4-Ubuntu1804-全家桶
+          name: 极路由4-满血版-2404
           path: bin/targets/ramips/mt7621/
