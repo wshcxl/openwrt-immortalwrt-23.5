@@ -1,151 +1,115 @@
-name: proto USB 5G RNDIS
+name: Build OpenWrt USB 5G
 
 on:
   workflow_dispatch: 
 
- jobs:
-build:
-runs-on: ubuntu-22.04
+jobs:
+  build:
+    runs-on: ubuntu-22.04
 
- ```
-steps:
-  - name: Checkout
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Install dependencies
-    run: |
-      sudo apt update
-      sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev python3 python3-distutils rsync unzip zlib1g-dev file wget
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev python3 python3-distutils rsync unzip zlib1g-dev file wget
 
-  - name: Clone ImmortalWRT
-    run: |
-      git clone https://github.com/immortalwrt/immortalwrt.git openwrt
-      cd openwrt
+      - name: Clone ImmortalWRT
+        run: |
+          git clone https://github.com/immortalwrt/immortalwrt.git openwrt
+          cd openwrt
+          echo "src-git passwall2 https://github.com/xiaorouji/openwrt-passwall2" >> feeds.conf.default
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-      echo "src-git passwall2 https://github.com/xiaorouji/openwrt-passwall2" >> feeds.conf.default
+      - name: Custom config
+        run: |
+          cd openwrt
+          echo "CONFIG_TARGET_x86=y" > .config
+          echo "CONFIG_TARGET_x86_64=y" >> .config
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_IPADDR=\"192.168.1.1\"" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_wpad-basic=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-wireless=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-ttyd=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-upnp=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-adguardhome=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-qos=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-filetransfer=y" >> .config
+          echo "CONFIG_PACKAGE_curl=y" >> .config
+          echo "CONFIG_PACKAGE_wget=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-net=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-net-rndis=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-serial=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-serial-option=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-serial-wwan=y" >> .config
+          # 拨号相关
+          echo "CONFIG_PACKAGE_uqmi=y" >> .config
+          echo "CONFIG_PACKAGE_luci-proto-qmi=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-net-qmi-wwan=y" >> .config
+          # 科学插件
+          echo "CONFIG_PACKAGE_luci-app-passwall2=y" >> .config
+          echo "CONFIG_PACKAGE_xray-core=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-unblockneteasemusic=y" >> .config
 
-      ./scripts/feeds update -a
-      ./scripts/feeds install -a
+      - name: Add Default Settings (Root & WiFi)
+        run: |
+          cd openwrt
+          mkdir -p package/base-files/files/etc/uci-defaults
+          cat > package/base-files/files/etc/uci-defaults/99-custom-settings << 'EOF'
+          #!/bin/sh
+            echo "root:admin" | chpasswd
+            uci show wireless >/dev/null 2>&1 || exit 0
+            uci set wireless.@wifi-device[0].disabled='0'
+            uci set wireless.@wifi-iface[0].ssid='MyWiFi_5G'
+            uci set wireless.@wifi-iface[0].key='password'
+            uci set wireless.@wifi-iface[0].encryption='psk2'
+            uci commit wireless
+            EOF
+          chmod +x package/base-files/files/etc/uci-defaults/99-custom-settings
 
-  - name: Custom config
-    run: |
-      cd openwrt
+      - name: Add USB 5G auto-dial script
+        run: |
+          cd openwrt
+          mkdir -p package/base-files/files/etc/init.d
+          cat > package/base-files/files/etc/init.d/usb5g_autodial << 'EOF'
+          #!/bin/sh /etc/rc.common
+          START=99
+           start() {
+          echo "检测 USB 5G 模块..."
+          sleep 5
+          DEV=$(ifconfig -a | grep -Eo "wwan[0-9]+|usb[0-9]+" | head -n1)
+           if [ -z "$DEV" ]; then
+          echo "未检测到 USB 设备"
+          return 1
+           fi
+  echo "设备: $DEV"
+   if [ -e /dev/cdc-wdm0 ]; then
+    APN="internet"
+    proto="qmi"
+   else
+    APN="internet"
+    proto="3g"
+   fi
+   uci set network.wwan=interface
+   uci set network.wwan.ifname="$DEV"
+   uci set network.wwan.proto="$proto"
+   uci set network.wwan.apn="$APN"
+   uci commit network
+   ifup wwan
+   echo "拨号完成"
+   }
+EOF
+  chmod +x package/base-files/files/etc/init.d/usb5g_autodial
 
-      echo "CONFIG_TARGET_x86=y" > .config
-      echo "CONFIG_TARGET_x86_64=y" >> .config
-      echo "CONFIG_PACKAGE_luci=y" >> .config
-      echo "CONFIG_IPADDR=\"192.168.1.1\"" >> .config
-
-      echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
-      echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
-
-      echo "CONFIG_PACKAGE_wpad-basic=y" >> .config
-      echo "CONFIG_PACKAGE_luci-app-wireless=y" >> .config
-      echo "CONFIG_PACKAGE_luci-app-ttyd=y" >> .config
-      echo "CONFIG_PACKAGE_luci-app-upnp=y" >> .config
-      echo "CONFIG_PACKAGE_luci-app-adguardhome=y" >> .config
-      echo "CONFIG_PACKAGE_luci-app-qos=y" >> .config
-      echo "CONFIG_PACKAGE_luci-app-filetransfer=y" >> .config
-
-      echo "CONFIG_PACKAGE_curl=y" >> .config
-      echo "CONFIG_PACKAGE_wget=y" >> .config
-
-      echo "CONFIG_PACKAGE_kmod-usb-net=y" >> .config
-      echo "CONFIG_PACKAGE_kmod-usb-net-rndis=y" >> .config
-      echo "CONFIG_PACKAGE_kmod-usb-serial=y" >> .config
-      echo "CONFIG_PACKAGE_kmod-usb-serial-option=y" >> .config
-      echo "CONFIG_PACKAGE_kmod-usb-serial-wwan=y" >> .config
-
-      # 拨号相关（关键）
-      echo "CONFIG_PACKAGE_uqmi=y" >> .config
-      echo "CONFIG_PACKAGE_luci-proto-qmi=y" >> .config
-      echo "CONFIG_PACKAGE_kmod-usb-net-qmi-wwan=y" >> .config
-
-      # 科学插件（已替换）
-      echo "CONFIG_PACKAGE_luci-app-passwall2=y" >> .config
-      echo "CONFIG_PACKAGE_xray-core=y" >> .config
-
-      echo "CONFIG_PACKAGE_luci-app-unblockneteasemusic=y" >> .config
-
-  - name: Add Default Settings (Root & WiFi)
-    run: |
-      cd openwrt
-      mkdir -p package/base-files/files/etc/uci-defaults
-
-      cat > package/base-files/files/etc/uci-defaults/99-custom-settings << 'EOF'
-      ```
-
-      #!/bin/sh
-
-        echo "root:admin" | chpasswd
-
-       # 如果没有无线设备就跳过
-         uci show wireless >/dev/null 2>&1 || exit 0
-         uci set wireless.@wifi-device[0].disabled='0'
-         uci set wireless.@wifi-iface[0].ssid='MyWiFi_5G'
-         uci set wireless.@wifi-iface[0].key='password'
-         uci set wireless.@wifi-iface[0].encryption='psk2'
-         uci commit wireless
-         EOF
-
-        ```
-      chmod +x package/base-files/files/etc/uci-defaults/99-custom-settings
-
-  - name: Add USB 5G auto-dial script
-    run: |
-      cd openwrt
-      mkdir -p package/base-files/files/etc/init.d
-
-      cat > package/base-files/files/etc/init.d/usb5g_autodial << 'EOF'
-      ```
-
-      #!/bin/sh /etc/rc.common
-
-      START=99
-
-      start() {
-      echo "检测 USB 5G 模块..."
-      sleep 5
-
-      ```
-      DEV=$(ifconfig -a | grep -Eo 'wwan[0-9]+|usb[0-9]+' | head -n1)
-
-      if [ -z "$DEV" ]; then
-      echo "未检测到 USB 设备"
-      return 1
-        fi
-
-      echo "设备: $DEV"
-
-      if [ -e /dev/cdc-wdm0 ]; then
-        APN="internet"
-         proto="qmi"
-      else
-         APN="internet"
-         proto="3g"
-      fi
-
-      uci set network.wwan=interface
-      uci set network.wwan.ifname="$DEV"
-      uci set network.wwan.proto="$proto"
-      uci set network.wwan.apn="$APN"
-      uci commit network
-
-       ifup wwan
-      echo "拨号完成"
-      ```
-
-      }
-        EOF
-
-       ```
-      chmod +x package/base-files/files/etc/init.d/usb5g_autodial
-
-  - name: Build
-    run: |
-      cd openwrt
-      make defconfig
-      make download -j8
-      make -j$(nproc)
-      ```
+      - name: Build
+        run: |
+          cd openwrt
+          make defconfig
+          make download -j8
+          make -j$(nproc)
 
