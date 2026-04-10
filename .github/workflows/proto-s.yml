@@ -1,4 +1,4 @@
-name: Build OpenWrt USB 5G RNDIS
+name: proto USB 5G RNDIS
 
 on:
   workflow_dispatch: 
