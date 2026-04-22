@@ -75,7 +75,6 @@ jobs:
           echo "CONFIG_PACKAGE_luci-i18n-adbyby-plus-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-upnp-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-samba-zh-cn=y" >> .config
-          # QModem 如果有中文包就加上（没有也不会影响编译）
 
           # 🔹 4. 🔥 无线功能修复（关键！）
           # HC5962芯片：MT7603EN(2.4G) + MT7612EN(5G)
@@ -122,13 +121,65 @@ jobs:
           echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
           echo "CONFIG_PACKAGE_kmod-tun=y" >> .config
 
-          # 🔹 10.5 防止语言包被精简掉
+          # 🔹 10.5 预设 Root 密码（重要！）
+          echo 'CONFIG_TARGET_ROOT_PASSWORD="password"' >> .config
+
+          # 🔹 10.6 防止语言包被精简掉
           echo "CONFIG_ALL_NONSHARED=n" >> .config
           echo "CONFIG_ALL_KMODS=n" >> .config
 
           # 🔹 11. 生成配置
           make defconfig
           # --- 核心配置结束 ---
+
+      - name: 📡 5.5 预设 WiFi 配置（2.4G + 5G 双频）
+        run: |
+          # 创建 files 目录结构
+          mkdir -p files/etc/config
+          mkdir -p files/etc/hotplug.d/iface
+          
+          # 🔹 写入 wireless 配置文件（HC5962 专用）
+          cat > files/etc/config/wireless << 'EOF'
+config wifi-device 'radio0'
+    option type 'mac80211'
+    option channel '11'
+    option hwmode '11g'
+    option path 'platform/10180000.usb/usb-1/1-1/1-1.3/1-1.3:1.0'
+    option htmode 'HT20'    option disabled '0'
+
+config wifi-iface
+    option device 'radio0'
+    option network 'lan'
+    option mode 'ap'
+    option ssid 'immortalwrt'
+    option encryption 'psk2'
+    option key 'password'
+
+config wifi-device 'radio1'
+    option type 'mac80211'
+    option channel '149'
+    option hwmode '11a'
+    option path 'platform/10180000.usb/usb-1/1-1/1-1.4/1-1.4:1.0'
+    option htmode 'VHT80'
+    option disabled '0'
+
+config wifi-iface
+    option device 'radio1'
+    option network 'lan'
+    option mode 'ap'
+    option ssid 'immortalwrt'
+    option encryption 'psk2'
+    option key 'password'
+EOF
+
+          # 🔹 可选：首次启动自动应用配置（防止首次启动无线未启用）
+          cat > files/etc/hotplug.d/iface/99-wifi-fix << 'EOF'
+#!/bin/sh
+[ "$ACTION" = "ifup" ] && [ "$INTERFACE" = "lan" ] && {
+    wifi reload
+}
+EOF
+          chmod +x files/etc/hotplug.d/iface/99-wifi-fix
 
       - name: 📥 6. 下载源码包
         run: make download -j$(nproc)
@@ -143,8 +194,24 @@ jobs:
           if [ ! "$(ls -A firmware_output/*.bin 2>/dev/null)" ]; then
              find bin -type f -name "*hiwifi*squashfs*.bin" -exec cp {} firmware_output/ \;
           fi
-          echo "✅ 编译产物："
-          ls -lh firmware_output/
+          echo "✅ 编译产物："          ls -lh firmware_output/
+          
+          # 显示登录信息
+          echo ""
+          echo "=========================================="
+          echo "🎉 固件编译完成！"
+          echo "📱 默认登录信息："
+          echo "   IP地址：192.168.1.1"
+          echo "   用户名：root"
+          echo "   密码：password"
+          echo ""
+          echo "📶 默认 WiFi 信息："
+          echo "   2.4G 名称：immortalwrt"
+          echo "   5G 名称：  immortalwrt"
+          echo "   WiFi 密码：zxcvbnm.0"
+          echo "=========================================="
+          echo ""
+
       - name: 📤 9. 上传固件
         uses: actions/upload-artifact@v4
         with:
