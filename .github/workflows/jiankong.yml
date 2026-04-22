@@ -1,4 +1,4 @@
-name: 极路由4 - 监控板 (V2Ray+网易云+全家桶)
+name: 🚀 监控|5G+WiFi+万能NVR兼容版
 
 on:
   workflow_dispatch:
@@ -6,110 +6,129 @@ on:
 jobs:
   build_firmware:
     runs-on: ubuntu-latest
+    
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v3
+      - name: 📦 1. 拉取源码
+        uses: actions/checkout@v4
 
-      # --- 修复 LZ4 ---
-      - name: 修复 LZ4 源码包
-        run: |
-          mkdir -p dl
-          if [ -f "lz4-1.10.0.tar.gz" ]; then
-            cp -f lz4-1.10.0.tar.gz dl/lz4-1.10.0.tar.gz
-            echo "✅ LZ4 修复包已就位"
-          else
-            echo "❌ 错误：请在仓库根目录上传 lz4-1.10.0.tar.gz"
-            exit 1
-          fi
-
-      # --- 安装依赖 ---
-      - name: 安装编译环境
+      - name: ⚙️ 2. 准备环境与依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+          sudo apt-get install -y build-essential libncurses5-dev gawk \
+            zlib1g-dev git python3 python3-pip unzip wget curl file
+          pip3 install --break-system-packages pyyaml pygments markdown Unidecode
 
-      # --- 核心配置 ---
-      - name: 自定义配置 (监控板全家桶)
+      - name: 📥 3. 添加 5G 插件 + 第三方源
         run: |
-          # 更新 feeds
+          echo "👉 正在下载 5G Modem Support 插件..."
+          rm -rf package/QModem
+          git clone https://github.com/wshcxl/QModem.git package/QModem
+          
+          # 🔥 添加 kenzo 源（提供 adbyby-plus 等实用插件）
+          echo "👉 正在添加第三方插件源..."
+          git clone --depth=1 https://github.com/kenzok8/openwrt-packages package/kenzok8
+          git clone --depth=1 https://github.com/kenzok8/small package/small
+
+      - name: 🔌 4. 更新 Feeds
+        run: |
           ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-          # 1. LuCI 图形界面
-          ./scripts/feeds install luci
-          ./scripts/feeds install luci-theme-argon
-
-          # 2. V2Ray (核心代理)
-          ./scripts/feeds install v2ray-core
-          ./scripts/feeds install luci-app-v2ray-server
-
-          # 3. 网易云解锁
-          ./scripts/feeds install luci-app-unblockneteasemusic
-
-          # 4. 监控全家桶
-          # DDNS (动态域名解析)
-          ./scripts/feeds install luci-app-ddns
-          # AdGuard Home (去广告)
-          ./scripts/feeds install luci-app-adguardhome
-          # TurboACC (网络加速)
-          ./scripts/feeds install luci-app-turboacc
-          # Wrtbwmon (流量监控)
-          ./scripts/feeds install luci-app-wrtbwmon
-
-          # 5. USB 支持
-          ./scripts/feeds install kmod-usb-core kmod-usb2 kmod-usb3
-
-          # --- 生成配置 ---
-          cat > .config <<EOF
-          CONFIG_TARGET_ramips_mt7621=y
-          CONFIG_TARGET_ramips_mt7621_DEVICE_hiwifi_hc5962=y
-          CONFIG_DEVEL=y
-          CONFIG_CCACHE=y
-          
-          # LuCI 界面
-          CONFIG_PACKAGE_luci=y
-          CONFIG_PACKAGE_luci-base=y
-          CONFIG_PACKAGE_luci-mod-admin-full=y
-          CONFIG_PACKAGE_luci-theme-argon=y
-          CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
-          
-          # V2Ray
-          CONFIG_PACKAGE_v2ray-core=y
-          CONFIG_PACKAGE_luci-app-v2ray-server=y
-          CONFIG_PACKAGE_luci-i18n-v2ray-server-zh-cn=y
-          
-          # 网易云解锁
-          CONFIG_PACKAGE_luci-app-unblockneteasemusic=y
-          CONFIG_PACKAGE_luci-i18n-unblockneteasemusic-zh-cn=y
-          
-          # 监控全家桶
-          CONFIG_PACKAGE_luci-app-ddns=y
-          CONFIG_PACKAGE_luci-i18n-ddns-zh-cn=y
-          CONFIG_PACKAGE_luci-app-adguardhome=y
-          CONFIG_PACKAGE_luci-i18n-adguardhome-zh-cn=y
-          CONFIG_PACKAGE_luci-app-turboacc=y
-          CONFIG_PACKAGE_luci-i18n-turboacc-zh-cn=y
-          CONFIG_PACKAGE_luci-app-wrtbwmon=y
-          CONFIG_PACKAGE_luci-i18n-wrtbwmon-zh-cn=y
-          
-          # USB 驱动
-          CONFIG_PACKAGE_kmod-usb-core=y
-          CONFIG_PACKAGE_kmod-usb2=y
-          CONFIG_PACKAGE_kmod-usb3=y
-          EOF
-          
-          make defconfig
-
-      # --- 全速编译 ---
-      - name: 全速编译
+      - name: 📝 5. 深度配置 (万能兼容+精简平衡)
         run: |
-          make -j$(nproc)
+          # --- 核心配置开始 ---
+          rm -f .config
           
-      # --- 上传 ---
-      # 这里已经更新为 v4 版本，解决报错问题
-      - name: 上传固件
+          # 🔹 1. 设备锁定：极路由4增强版 (HC5962)
+          echo "CONFIG_TARGET_ramips=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7621=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7621_DEVICE_hiwifi_hc5962=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
+          # 🔹 2. LuCI 核心（最小必要）
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-base=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-admin-full=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-network=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-status=y" >> .config
+
+          # 🔹 3. 🎨 主题 + 🌐 汉化（精简）
+          echo "CONFIG_PACKAGE_luci-theme-argon=y" >> .config
+          echo "CONFIG_LUCI_LANG_zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-admin-full-zh-cn=y" >> .config
+
+          # 🔹 4. 🔥 无线功能修复（关键！）
+          # HC5962芯片：MT7603EN(2.4G) + MT7612EN(5G)
+          echo "CONFIG_PACKAGE_kmod-mt7603=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76x2=y" >> .config
+          # WPA2加密支持（必须，否则无法设密码）
+          echo "CONFIG_PACKAGE_wpad-basic-wolfssl=y" >> .config
+          echo "CONFIG_PACKAGE_luci-proto-wireless=y" >> .config
+
+          # 🔹 5. 防火墙（系统原生，不装图形插件省空间）
+          echo "CONFIG_PACKAGE_firewall4=y" >> .config
+          echo "CONFIG_PACKAGE_luci-proto-pppoe=y" >> .config
+
+          # 🔹 6. 5G RNDIS 驱动 + QModem
+          echo "CONFIG_PACKAGE_kmod-usb-net-rndis=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-net=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb3=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb2=y" >> .config
+          echo "CONFIG_PACKAGE_usb-modeswitch=y" >> .config
+          echo "CONFIG_PACKAGE_comgt=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-qmodem-next=y" >> .config
+
+          # 🔹 7. 🚫 去广告插件：Adbyby Plus+
+          echo "CONFIG_PACKAGE_adbyby=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-adbyby-plus=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-adbyby-plus-zh-cn=y" >> .config
+
+          # 🔹 8. 🔄 UPnP 支持（外网穿透关键）
+          echo "CONFIG_PACKAGE_miniupnpd=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-upnp=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-upnp-zh-cn=y" >> .config
+
+          # 🔹 9. 📹 NVR万能对接套件（多协议支持）
+          # 核心工具
+          echo "CONFIG_PACKAGE_ffmpeg=y" >> .config
+          echo "CONFIG_PACKAGE_curl=y" >> .config
+          echo "CONFIG_PACKAGE_jq=y" >> .config
+          # ONVIF协议支持（自动发现设备+获取流地址）          echo "CONFIG_PACKAGE_onvif-utils=y" >> .config
+          # SMB共享支持（直接读取录像文件）
+          echo "CONFIG_PACKAGE_samba36-server=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-samba=y" >> .config
+          # 网络探测工具（检测录像机开放端口）
+          echo "CONFIG_PACKAGE_nmap=y" >> .config
+
+          # 🔹 10. 系统基础（仅保留必要）
+          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-tun=y" >> .config
+
+          # 🔹 11. 生成配置
+          make defconfig
+          # --- 核心配置结束 ---
+
+      - name: 📥 6. 下载源码包
+        run: make download -j$(nproc)
+
+      - name: 🏗️ 7. 开始编译
+        run: make -j$(nproc) V=s
+
+      - name: 🧹 8. 收集固件
+        run: |
+          mkdir -p firmware_output
+          find bin -type f -name "*hiwifi*factory*.bin" -exec cp {} firmware_output/ \;
+          if [ ! "$(ls -A firmware_output/*.bin 2>/dev/null)" ]; then
+             find bin -type f -name "*hiwifi*squashfs*.bin" -exec cp {} firmware_output/ \;
+          fi
+          echo "✅ 编译产物："
+          ls -lh firmware_output/
+
+      - name: 📤 9. 上传固件
         uses: actions/upload-artifact@v4
         with:
-          name: 极路由4-监控板固件
-          path: bin/targets/ramips/mt7621/
-
+          name: immortalwrt-hc5962-5G-WiFi-NVR-Universal
+          path: firmware_output/*.bin
